@@ -13,6 +13,7 @@
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="$ANDROID_HOME/platform-tools/adb"
+EMULATOR="$ANDROID_HOME/emulator/emulator"
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 CACHE_DIR="$HOME/.cache/swiftbar-timewarden"
 STATE_DIR="$CACHE_DIR/running"
@@ -60,6 +61,12 @@ LAUNCHER
 }
 
 case "${1:-}" in
+    --launch-avd)
+        avd_name="${2:?avd name required}"
+        "$EMULATOR" -avd "$avd_name" &>/dev/null &
+        disown
+        exit 0
+        ;;
     --run-android)
         project_dir="${2:?project dir required}"
         shift 2
@@ -270,6 +277,29 @@ if [[ -x "$ADB" ]]; then
 fi
 android_count=${#android_serials[@]}
 
+# ── Gather: Android AVDs (available emulators, like iOS simulators) ──
+avd_names=()
+if [[ -x "$EMULATOR" ]]; then
+    # Find which AVDs are already running
+    running_avds=()
+    for serial in "${android_serials[@]}"; do
+        if [[ "$serial" == emulator-* ]]; then
+            avd=$("$ADB" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r\n')
+            [[ -n "$avd" ]] && running_avds+=("$avd")
+        fi
+    done
+    while IFS= read -r avd; do
+        [[ -z "$avd" ]] && continue
+        # Skip AVDs that are already running
+        skip=false
+        for r in "${running_avds[@]}"; do
+            [[ "$r" == "$avd" ]] && { skip=true; break; }
+        done
+        $skip || avd_names+=("$avd")
+    done < <("$EMULATOR" -list-avds 2>/dev/null)
+fi
+avd_count=${#avd_names[@]}
+
 # ── Gather: iOS physical devices (via devicectl) ──
 ios_phy_names=()
 ios_phy_os=()
@@ -466,8 +496,19 @@ fi
 echo "---"
 
 # ── Android ─────────────────────────────────────────
-(( android_count == 1 )) && a_unit="device" || a_unit="devices"
-android_label="Android · ${android_count} ${a_unit}"
+android_header="Android"
+android_parts=()
+if (( android_count > 0 )); then
+    (( android_count == 1 )) && android_parts+=("${android_count} device") || android_parts+=("${android_count} devices")
+fi
+if (( avd_count > 0 )); then
+    (( avd_count == 1 )) && android_parts+=("${avd_count} avd") || android_parts+=("${avd_count} avds")
+fi
+if (( ${#android_parts[@]} > 0 )); then
+    android_label="Android · $(printf '%s, ' "${android_parts[@]}" | sed 's/, $//')"
+else
+    android_label="Android · 0 devices"
+fi
 if [[ -n "$ICON_ANDROID" ]]; then
     echo "$android_label | image=$ICON_ANDROID width=16 height=16 size=14"
 else
@@ -486,6 +527,16 @@ if (( android_count > 0 )); then
 else
     echo "-----"
     echo "--Waiting for devices | color=$C_DISABLED sfimage=cable.connector.slash size=12"
+fi
+
+# AVDs (available emulators, not yet running)
+if (( avd_count > 0 )); then
+    echo "-----"
+    for i in "${!avd_names[@]}"; do
+        echo "--${avd_names[$i]} | sfimage=desktopcomputer bash='$SELF' param1='--launch-avd' param2='${avd_names[$i]}' terminal=false refresh=true size=13"
+    done
+elif [[ -x "$EMULATOR" ]] && (( android_count == 0 )); then
+    echo "--No AVDs available | color=$C_DISABLED sfimage=desktopcomputer.slash size=12"
 fi
 
 if (( android_wt_count > 0 )); then
