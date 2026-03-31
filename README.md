@@ -1,4 +1,4 @@
-# Timewarden SwiftBar Plugin
+# Timewarden xbar Plugin
 
 Menu bar launcher for [Timewarden](https://timewarden.app) mobile development. Build, deploy, and monitor Android/iOS builds from your macOS menu bar.
 
@@ -14,27 +14,27 @@ Menu bar launcher for [Timewarden](https://timewarden.app) mobile development. B
 ## Install
 
 ```bash
-brew install --cask swiftbar
+brew install --cask xbar
 ```
 
-Launch SwiftBar once and set a plugin directory when prompted. Then:
+Launch xbar once and set a plugin directory when prompted. Then:
 
 ```bash
-git clone https://github.com/gettimewarden/swiftbar-timewarden.git
-cd swiftbar-timewarden
+git clone https://github.com/nicefella1/xbar-timewarden.git
+cd xbar-timewarden
 ./install.sh /path/to/timewarden.mobile
 ```
 
 The installer will:
-1. Verify SwiftBar is installed (installs via Homebrew if missing)
-2. Detect your SwiftBar plugins directory
-3. Save your project path to `~/.cache/swiftbar-timewarden/config`
+1. Verify xbar is installed (installs via Homebrew if missing)
+2. Detect your xbar plugins directory
+3. Save your project path to `~/.cache/xbar-timewarden/config`
 4. Copy the plugin and trigger a refresh
 
 ### One-liner
 
 ```bash
-git clone https://github.com/gettimewarden/swiftbar-timewarden.git /tmp/swiftbar-tw && /tmp/swiftbar-tw/install.sh
+git clone https://github.com/nicefella1/xbar-timewarden.git /tmp/xbar-tw && /tmp/xbar-tw/install.sh
 ```
 
 ## Uninstall
@@ -46,14 +46,14 @@ git clone https://github.com/gettimewarden/swiftbar-timewarden.git /tmp/swiftbar
 ## Requirements
 
 - macOS 11+
-- [SwiftBar](https://github.com/swiftbar/SwiftBar)
+- [xbar](https://xbarapp.com)
 - [Timewarden mobile](https://github.com/gettimewarden/timewarden.mobile) checkout with `run.sh` / `run-ios.sh`
 - Android SDK (for Android builds)
 - Xcode (for iOS builds)
 
 ## Configuration
 
-The config lives at `~/.cache/swiftbar-timewarden/config`:
+The config lives at `~/.cache/xbar-timewarden/config`:
 
 ```bash
 TIMEWARDEN_PROJECT="/path/to/timewarden.mobile"
@@ -66,21 +66,23 @@ Edit this file to change the project path. The plugin re-reads it on every refre
 ```
 [tw icon]                           <- menu bar (shows build status when active)
 |--------------------------------------------|
-| main . 1up . 8 changed           <- git status: branch, sync, dirty files
+| ⎇ main · 1↑ · 8 changed          <- git status: branch, sync, dirty files
 |   89122a4 chore: rename logger..  <- last commit
 |   8 uncommitted changes           <- dirty count
 |   1 ahead of remote               <- push reminder
 |--------------------------------------------|
-| Android . 1 device                <- section header
-|   Run All Devices                  <- default action
-|   SM-S936B . A16 . 79%            <- device with inline info
+| 🤖 Android · 1 device             <- section header
+|   ▶ Run                           <- default action
+|   🔋 SM-S936B · A16 · 79%        <- device with battery info
 |--------------------------------------------|
-| iOS . 1 device, 5 sims            <- section header
-|   Run                              <- auto-detect (prefers physical)
-|   iPhone 16 . iOS 26.4             <- physical device (USB)
-|   iPhone 17 Pro                    <- simulator
-|   iPhone 17 Pro Max
+|  iOS · 1 device, 5 sims          <- section header
+|   🔌 iPhone 16 · iOS 26.4        <- physical device (USB)
+|   📱 iPhone 17 Pro               <- simulator
+|   📱 iPhone 17 Pro Max
 |   ...
+|--------------------------------------------|
+| 🔄 Refresh                        <- refresh plugin
+| Preferences                       <- open xbar
 |--------------------------------------------|
 ```
 

@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
-# <swiftbar.title>Timewarden Launcher</swiftbar.title>
-# <swiftbar.version>v2.0</swiftbar.version>
-# <swiftbar.author>abd3lraouf</swiftbar.author>
-# <swiftbar.desc>Build and launch Timewarden on Android/iOS. Tracks running builds. Supports worktrees.</swiftbar.desc>
-# <swiftbar.hideAbout>true</swiftbar.hideAbout>
-# <swiftbar.hideRunInTerminal>true</swiftbar.hideRunInTerminal>
-# <swiftbar.hideLastUpdated>false</swiftbar.hideLastUpdated>
-# <swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>
-# <swiftbar.hideSwiftBar>true</swiftbar.hideSwiftBar>
+# <xbar.title>Timewarden Launcher</xbar.title>
+# <xbar.version>v2.0</xbar.version>
+# <xbar.author>abd3lraouf</xbar.author>
+# <xbar.author.github>nicefella1</xbar.author.github>
+# <xbar.desc>Build and launch Timewarden on Android/iOS. Tracks running builds. Supports worktrees.</xbar.desc>
 
 # ── Environment ─────────────────────────────────────
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -15,13 +11,13 @@ export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-# When run via SwiftBar, resolve symlinks to get actual installed path
+# When run via xbar, resolve symlinks to get actual installed path
 if [[ -L "$SELF" ]]; then
     SELF=$(readlink -f "$SELF")
 fi
-# Get plugin filename for URL scheme (e.g. swiftbar://refreshplugin)
+# Get plugin filename for URL scheme (e.g. xbar://refreshplugin)
 PLUGIN_NAME="$(basename "$SELF")"
-CACHE_DIR="$HOME/.cache/swiftbar-timewarden"
+CACHE_DIR="$HOME/.cache/xbar-timewarden"
 STATE_DIR="$CACHE_DIR/running"
 CONFIG_FILE="$CACHE_DIR/config"
 
@@ -31,7 +27,7 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "⚠ Not configured | size=13"
     echo "---"
     echo "Run the install script first | color=#8E8E93 size=12"
-    echo "See: github.com/gettimewarden/swiftbar-timewarden | size=12"
+    echo "See: github.com/gettimewarden/xbar-timewarden | size=12"
     exit 0
 fi
 if ! grep -qE '^TIMEWARDEN_PROJECT="[^"]+"$' "$CONFIG_FILE" 2>/dev/null; then
@@ -46,7 +42,7 @@ MAIN_PROJECT="${TIMEWARDEN_PROJECT:?TIMEWARDEN_PROJECT not set in $CONFIG_FILE}"
 
 # ── Self-dispatch ───────────────────────────────────
 # Creates a temp launcher script with state tracking, then opens it in
-# Terminal.app via osascript. Returns immediately so SwiftBar is never blocked.
+# Terminal.app via osascript. Returns immediately so xbar is never blocked.
 
 _launch_in_terminal() {
     local platform="$1" display="$2" project_dir="$3" wt_name="$4"
@@ -139,13 +135,13 @@ _ANDROID_ICON_PREGEN="aVZCT1J3MEtHZ29BQUFBTlNVaEVVZ0FBQUNBQUFBQWdDQVlBQUFCemVucj
 generate_icons() {
     mkdir -p "$CACHE_DIR"
 
-    # ── Menu bar icon: white foreground as templateImage (adapts to dark/light mode) ──
+    # ── Menu bar icon: 36x36 at 144 DPI for Retina (xbar recommended) ──
     local src="$MAIN_PROJECT/app/android/src/main/res/mipmap-xhdpi/ic_launcher_foreground.png"
     local cached="$CACHE_DIR/menubar.b64"
     if [[ ! -s "$cached" ]] || [[ "$src" -nt "$cached" ]]; then
         local tmp="$CACHE_DIR/menubar_tmp.png"
         cp "$src" "$tmp"
-        sips -z 36 36 "$tmp" --out "$tmp" >/dev/null 2>&1
+        sips -z 26 26 "$tmp" --out "$tmp" >/dev/null 2>&1
         base64 -i "$tmp" | tr -d '\n' > "$cached"
         rm -f "$tmp"
     fi
@@ -176,6 +172,32 @@ C_DISABLED="#636366"   # System gray 3 — disabled/empty
 
 # ── Helpers ─────────────────────────────────────────
 
+# Shared renderer: branch header badge + detail submenu items
+# Usage: _branch_badge <ahead> <behind> <dirty> → prints " · 2↑ 1↓ · 3 changed"
+_branch_badge() {
+    local ahead="$1" behind="$2" dirty="$3"
+    local badge=""
+    local sync_parts=()
+    (( ahead > 0 )) && sync_parts+=("${ahead}↑")
+    (( behind > 0 )) && sync_parts+=("${behind}↓")
+    if (( ${#sync_parts[@]} > 0 )); then
+        badge+=" · $(IFS=' '; echo "${sync_parts[*]}")"
+    fi
+    (( dirty > 0 )) && badge+=" · ${dirty} changed"
+    echo "$badge"
+}
+
+# Render detail submenu items for a branch
+# Usage: _render_branch_details <prefix> <commit_hash> <commit_msg> <dirty> <stash> <ahead> <behind>
+_render_branch_details() {
+    local pfx="$1" hash="$2" msg="$3" dirty="$4" stash="$5" ahead="$6" behind="$7"
+    echo "${pfx}${hash} ${msg:0:40} | size=12"
+    (( dirty > 0 ))  && echo "${pfx}${dirty} uncommitted changes | size=12"
+    (( stash > 0 ))  && echo "${pfx}${stash} stashed | size=12"
+    (( ahead > 0 ))  && echo "${pfx}${ahead} ahead of remote | size=12"
+    (( behind > 0 )) && echo "${pfx}${behind} behind remote | size=12"
+}
+
 _adb_timeout() {
     local timeout=5
     if command -v timeout &>/dev/null; then
@@ -197,14 +219,14 @@ serial_to_model() {
     echo "$serial"
 }
 
-# Map battery level → SF Symbol + color
+# Map battery level → emoji
 battery_icon() {
     local level=$1
-    if (( level > 75 )); then echo "battery.100"
-    elif (( level > 50 )); then echo "battery.75"
-    elif (( level > 25 )); then echo "battery.50"
-    elif (( level > 10 )); then echo "battery.25"
-    else echo "battery.0"
+    if (( level > 75 )); then echo "🔋"
+    elif (( level > 50 )); then echo "🔋"
+    elif (( level > 25 )); then echo "🪫"
+    elif (( level > 10 )); then echo "🪫"
+    else echo "🪫"
     fi
 }
 battery_color() {
@@ -388,8 +410,11 @@ wt_branches=()
 wt_has_run_sh=()
 wt_has_run_ios=()
 wt_dirty=()
+wt_commit_hashes=()
 wt_commits=()
 wt_ahead=()
+wt_behind=()
+wt_stash=()
 main_upstream=$(git -C "$MAIN_PROJECT" rev-parse --abbrev-ref @{upstream} 2>/dev/null || echo "")
 while IFS= read -r line; do
     [[ -z "$line" ]] && continue
@@ -403,13 +428,19 @@ while IFS= read -r line; do
     d=$(git -C "$wt_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
     wt_dirty+=("$d")
     c=$(git -C "$wt_path" log --oneline -1 --no-decorate 2>/dev/null)
+    wt_commit_hashes+=("${c%% *}")
     wt_commits+=("${c#* }")
+    s=$(git -C "$wt_path" stash list 2>/dev/null | wc -l | tr -d ' ')
+    wt_stash+=("$s")
     if [[ -n "$main_upstream" ]]; then
         a=$(git -C "$wt_path" rev-list --count "$main_upstream..HEAD" 2>/dev/null || echo "0")
+        b=$(git -C "$wt_path" rev-list --count "HEAD..$main_upstream" 2>/dev/null || echo "0")
     else
         a="0"
+        b="0"
     fi
     wt_ahead+=("$a")
+    wt_behind+=("$b")
 done < <(git -C "$MAIN_PROJECT" worktree list 2>/dev/null)
 wt_count=${#wt_paths[@]}
 
@@ -437,15 +468,15 @@ for v in "${wt_has_run_ios[@]}"; do [[ "$v" == "yes" ]] && ((ios_wt_count++)); d
         else
             bar_status="${running_count} builds"
         fi
-        echo "$bar_status | sfimage=hammer.fill color=$C_BUILD size=13"
+        echo "$bar_status | templateImage=$ICON_MENUBAR color=$C_BUILD size=13"
     else
-        echo "TW | sfimage=hammer.fill size=13"
+        echo "| templateImage=$ICON_MENUBAR"
     fi
     echo "---"
 
 # ── Building (active builds) ──────────────────────
 if (( running_count > 0 )); then
-    echo "Building | sfimage=hammer.fill color=$C_BUILD size=14"
+    echo "🔨 Building | color=$C_BUILD size=14"
     for i in "${!running_pids[@]}"; do
         p="${running_platforms[$i]}"
         d="${running_devices[$i]}"
@@ -455,61 +486,35 @@ if (( running_count > 0 )); then
         # Resolve to display name
         if [[ "$p" == "android" ]]; then
             [[ "$d" == "all" ]] && dn="All devices" || dn="$(serial_to_model "$d")"
-            p_icon="play.rectangle.fill"
+            p_icon="▶"
             p_color="$C_ANDROID"
         else
             [[ "$d" == "default" ]] && dn="Default simulator" || dn="$d"
-            p_icon="apple.logo"
+            p_icon=""
             p_color="$C_IOS"
         fi
 
         # Source suffix (only show if not main project)
         [[ "$wt" == "timewarden.mobile" ]] && src="" || src="  [$wt]"
 
-        echo "--${dn} · ${t}${src} | sfimage=$p_icon color=$p_color size=13"
-        echo "----Stop Build | sfimage=stop.fill color=$C_STOP bash='$SELF' param1='--stop' param2='${running_pids[$i]}' terminal=false refresh=true size=12"
+        echo "--${p_icon} ${dn} · ${t}${src} | color=$p_color size=13"
+        echo "----⏹ Stop Build | color=$C_STOP bash='$SELF' param1='--stop' param2='${running_pids[$i]}' terminal=false refresh=true size=12"
     done
     echo "---"
 fi
 
 # ── Project status ──────────────────────────────────
-# Sync status suffix
-sync_parts=()
-(( main_ahead > 0 )) && sync_parts+=("${main_ahead}↑")
-(( main_behind > 0 )) && sync_parts+=("${main_behind}↓")
-if (( ${#sync_parts[@]} > 0 )); then
-    sync_str=" · $(IFS=' '; echo "${sync_parts[*]}")"
-else
-    sync_str=""
-fi
-# Dirty indicator
-(( main_dirty > 0 )) && dirty_suffix=" · ${main_dirty} changed" || dirty_suffix=""
-
-echo "${main_branch}${sync_str}${dirty_suffix} | sfimage=arrow.triangle.branch color=$C_SECONDARY size=14 href='https://github.com/gettimewarden/timewarden.mobile'"
-echo "--${main_commit_hash} ${main_commit_msg:0:40} | sfimage=point.topleft.down.to.point.bottomright.curvepath color=$C_SECONDARY size=12"
-if (( main_dirty > 0 )); then
-    echo "--${main_dirty} uncommitted changes | sfimage=pencil.circle color=$C_BUILD size=12"
-fi
-if (( main_stash > 0 )); then
-    echo "--${main_stash} stashed | sfimage=tray.full color=$C_SECONDARY size=12"
-fi
-if (( main_ahead > 0 )); then
-    echo "--${main_ahead} ahead of remote | sfimage=arrow.up.circle color=$C_ANDROID size=12"
-fi
-if (( main_behind > 0 )); then
-    echo "--${main_behind} behind remote | sfimage=arrow.down.circle color=$C_BUILD size=12"
-fi
+main_badge=$(_branch_badge "$main_ahead" "$main_behind" "$main_dirty")
+echo "⎇ ${main_branch}${main_badge} | size=14 href='https://github.com/gettimewarden/timewarden.mobile'"
+_render_branch_details "--" "$main_commit_hash" "$main_commit_msg" "$main_dirty" "$main_stash" "$main_ahead" "$main_behind"
 if (( wt_count > 0 )); then
     echo "-----"
-    echo "--Worktrees (${wt_count}) | sfimage=arrow.triangle.branch color=$C_SECONDARY size=12"
+    echo "--⎇ Worktrees (${wt_count}) | color=$C_SECONDARY size=12"
     for i in "${!wt_paths[@]}"; do
         wt_name="$(basename "${wt_paths[$i]}")"
-        # Status badge: dirty count + ahead count
-        wt_badge=""
-        (( ${wt_dirty[$i]} > 0 )) && wt_badge+=" · ${wt_dirty[$i]} changed"
-        (( ${wt_ahead[$i]} > 0 )) && wt_badge+=" · ${wt_ahead[$i]}↑"
-        echo "----${wt_name} · ${wt_branches[$i]}${wt_badge} | sfimage=folder.fill color=$C_SECONDARY size=12 tooltip=${wt_paths[$i]}"
-        echo "------${wt_commits[$i]:0:45} | sfimage=point.topleft.down.to.point.bottomright.curvepath color=$C_DISABLED size=11"
+        wt_badge=$(_branch_badge "${wt_ahead[$i]}" "${wt_behind[$i]}" "${wt_dirty[$i]}")
+        echo "----📁 ${wt_name} · ${wt_branches[$i]}${wt_badge} | color=$C_SECONDARY size=12"
+        _render_branch_details "------" "${wt_commit_hashes[$i]}" "${wt_commits[$i]}" "${wt_dirty[$i]}" "${wt_stash[$i]}" "${wt_ahead[$i]}" "${wt_behind[$i]}"
     done
 fi
 
@@ -529,16 +534,20 @@ if (( ${#android_parts[@]} > 0 )); then
 else
     android_label="Android · 0 devices"
 fi
-echo "$android_label | sfimage=play.rectangle.fill color=$C_ANDROID size=14"
+echo "🤖 $android_label | color=$C_ANDROID size=14"
 
-echo "--Run All Devices | sfimage=play.fill bash='$SELF' param1='--run-android' param2='$MAIN_PROJECT' terminal=false size=13"
+if (( android_count > 1 )); then
+    echo "--▶ Run All Devices | bash='$SELF' param1='--run-android' param2='$MAIN_PROJECT' terminal=false size=13"
+elif (( android_count == 1 )); then
+    echo "--▶ Run | bash='$SELF' param1='--run-android' param2='$MAIN_PROJECT' param3='${android_serials[0]}' terminal=false size=13"
+fi
 if (( android_count > 0 )); then
     echo "-----"
     for i in "${!android_serials[@]}"; do
         bat="${android_batteries[$i]}"
         bat_icon=$(battery_icon "$bat")
         bat_col=$(battery_color "$bat")
-        echo "--${android_models[$i]} · A${android_versions[$i]} · ${bat}% | sfimage=$bat_icon color=$bat_col bash='$SELF' param1='--run-android' param2='$MAIN_PROJECT' param3='${android_serials[$i]}' terminal=false size=13 tooltip='${android_serials[$i]} · API ${android_apis[$i]}'"
+        echo "--${bat_icon} ${android_models[$i]} · A${android_versions[$i]} · ${bat}% | color=$bat_col bash='$SELF' param1='--run-android' param2='$MAIN_PROJECT' param3='${android_serials[$i]}' terminal=false size=13"
     done
 fi
 
@@ -546,28 +555,28 @@ fi
 if (( avd_count > 0 )); then
     echo "-----"
     for i in "${!avd_names[@]}"; do
-        echo "--${avd_names[$i]} | sfimage=desktopcomputer bash='$SELF' param1='--launch-avd' param2='${avd_names[$i]}' terminal=false refresh=true size=13"
+        echo "--🖥 ${avd_names[$i]} | bash='$SELF' param1='--launch-avd' param2='${avd_names[$i]}' terminal=false refresh=true size=13"
     done
 fi
 
 if (( android_count == 0 && avd_count == 0 )); then
     echo "-----"
-    echo "--Waiting for devices | color=$C_DISABLED sfimage=cable.connector.slash size=12"
+    echo "--Waiting for devices | color=$C_DISABLED size=12"
 fi
 
 if (( android_wt_count > 0 )); then
     echo "-----"
-    echo "--Worktrees | sfimage=arrow.triangle.branch color=$C_SECONDARY size=12"
+    echo "--⎇ Worktrees | color=$C_SECONDARY size=12"
     for i in "${!wt_paths[@]}"; do
         [[ "${wt_has_run_sh[$i]}" != "yes" ]] && continue
         wt_name="$(basename "${wt_paths[$i]}")"
         wt_badge=""
         (( ${wt_dirty[$i]} > 0 )) && wt_badge+=" · ${wt_dirty[$i]}~"
         (( ${wt_ahead[$i]} > 0 )) && wt_badge+=" · ${wt_ahead[$i]}↑"
-        echo "----${wt_name} · ${wt_branches[$i]}${wt_badge} | sfimage=folder.fill bash='$SELF' param1='--run-android' param2='${wt_paths[$i]}' terminal=false size=13 tooltip=${wt_paths[$i]}"
+        echo "----📁 ${wt_name} · ${wt_branches[$i]}${wt_badge} | bash='$SELF' param1='--run-android' param2='${wt_paths[$i]}' terminal=false size=13"
         if (( android_count > 0 )); then
             for j in "${!android_serials[@]}"; do
-                echo "------${android_models[$j]} | sfimage=cable.connector bash='$SELF' param1='--run-android' param2='${wt_paths[$i]}' param3='${android_serials[$j]}' terminal=false size=12"
+                echo "------🔌 ${android_models[$j]} | bash='$SELF' param1='--run-android' param2='${wt_paths[$i]}' param3='${android_serials[$j]}' terminal=false size=12"
             done
         fi
     done
@@ -588,16 +597,13 @@ fi
 if (( ${#ios_parts[@]} > 0 )); then
     ios_header="iOS · $(printf '%s, ' "${ios_parts[@]}" | sed 's/, $//')"
 fi
-echo "$ios_header | sfimage=apple.logo color=$C_IOS size=14"
-
-# Default run: auto-detects (prefers physical device over simulator)
-echo "--Run | sfimage=play.fill bash='$SELF' param1='--run-ios' param2='$MAIN_PROJECT' terminal=false size=13"
+echo " $ios_header | color=$C_IOS size=14"
 
 # Physical devices
 if (( ios_phy_count > 0 )); then
     echo "-----"
     for i in "${!ios_phy_names[@]}"; do
-        echo "--${ios_phy_names[$i]} · iOS ${ios_phy_os[$i]} | sfimage=cable.connector bash='$SELF' param1='--run-ios' param2='$MAIN_PROJECT' param3='--device' terminal=false size=13 tooltip='${ios_phy_model[$i]}'"
+        echo "--🔌 ${ios_phy_names[$i]} · iOS ${ios_phy_os[$i]} | bash='$SELF' param1='--run-ios' param2='$MAIN_PROJECT' param3='--device' terminal=false size=13"
     done
 fi
 
@@ -605,37 +611,37 @@ fi
 if (( ios_sim_count > 0 )); then
     echo "-----"
     for i in "${!ios_sim_names[@]}"; do
-        echo "--${ios_sim_names[$i]} | sfimage=iphone bash='$SELF' param1='--run-ios' param2='$MAIN_PROJECT' param3='--sim' param4='${ios_sim_names[$i]}' terminal=false size=13"
+        echo "--📱 ${ios_sim_names[$i]} | bash='$SELF' param1='--run-ios' param2='$MAIN_PROJECT' param3='--sim' param4='${ios_sim_names[$i]}' terminal=false size=13"
     done
 else
     echo "-----"
-    echo "--No simulators available | color=$C_DISABLED sfimage=iphone.slash size=12"
+    echo "--No simulators available | color=$C_DISABLED size=12"
 fi
 
 # Worktrees
 if (( ios_wt_count > 0 )); then
     echo "-----"
-    echo "--Worktrees | sfimage=arrow.triangle.branch color=$C_SECONDARY size=12"
+    echo "--⎇ Worktrees | color=$C_SECONDARY size=12"
     for i in "${!wt_paths[@]}"; do
         [[ "${wt_has_run_ios[$i]}" != "yes" ]] && continue
         wt_name="$(basename "${wt_paths[$i]}")"
         wt_badge=""
         (( ${wt_dirty[$i]} > 0 )) && wt_badge+=" · ${wt_dirty[$i]}~"
         (( ${wt_ahead[$i]} > 0 )) && wt_badge+=" · ${wt_ahead[$i]}↑"
-        echo "----${wt_name} · ${wt_branches[$i]}${wt_badge} | sfimage=folder.fill bash='$SELF' param1='--run-ios' param2='${wt_paths[$i]}' terminal=false size=13 tooltip=${wt_paths[$i]}"
+        echo "----📁 ${wt_name} · ${wt_branches[$i]}${wt_badge} | bash='$SELF' param1='--run-ios' param2='${wt_paths[$i]}' terminal=false size=13"
         if (( ios_phy_count > 0 )); then
             for j in "${!ios_phy_names[@]}"; do
-                echo "------${ios_phy_names[$j]} | sfimage=cable.connector bash='$SELF' param1='--run-ios' param2='${wt_paths[$i]}' param3='--device' terminal=false size=12"
+                echo "------🔌 ${ios_phy_names[$j]} | bash='$SELF' param1='--run-ios' param2='${wt_paths[$i]}' param3='--device' terminal=false size=12"
             done
         fi
         if (( ios_sim_count > 0 )); then
             for j in "${!ios_sim_names[@]}"; do
-                echo "------${ios_sim_names[$j]} | sfimage=iphone bash='$SELF' param1='--run-ios' param2='${wt_paths[$i]}' param3='--sim' param4='${ios_sim_names[$j]}' terminal=false size=12"
+                echo "------📱 ${ios_sim_names[$j]} | bash='$SELF' param1='--run-ios' param2='${wt_paths[$i]}' param3='--sim' param4='${ios_sim_names[$j]}' terminal=false size=12"
             done
         fi
     done
 fi
 
 echo "---"
-echo "Refresh | href='swiftbar://refreshplugin?plugin=$PLUGIN_NAME' sfimage=arrow.clockwise size=12"
+echo "🔄 Refresh | refresh=true size=12"
 
