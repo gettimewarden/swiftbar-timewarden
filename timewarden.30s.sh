@@ -524,9 +524,6 @@ if (( android_count > 0 )); then
         bat_col=$(battery_color "$bat")
         echo "--${android_models[$i]} · A${android_versions[$i]} · ${bat}% | sfimage=$bat_icon color=$bat_col bash='$SELF' param1='--run-android' param2='$MAIN_PROJECT' param3='${android_serials[$i]}' terminal=false size=13 tooltip='${android_serials[$i]} · API ${android_apis[$i]}'"
     done
-else
-    echo "-----"
-    echo "--Waiting for devices | color=$C_DISABLED sfimage=cable.connector.slash size=12"
 fi
 
 # AVDs (available emulators, not yet running)
@@ -535,8 +532,11 @@ if (( avd_count > 0 )); then
     for i in "${!avd_names[@]}"; do
         echo "--${avd_names[$i]} | sfimage=desktopcomputer bash='$SELF' param1='--launch-avd' param2='${avd_names[$i]}' terminal=false refresh=true size=13"
     done
-elif [[ -x "$EMULATOR" ]] && (( android_count == 0 )); then
-    echo "--No AVDs available | color=$C_DISABLED sfimage=desktopcomputer.slash size=12"
+fi
+
+if (( android_count == 0 && avd_count == 0 )); then
+    echo "-----"
+    echo "--Waiting for devices | color=$C_DISABLED sfimage=cable.connector.slash size=12"
 fi
 
 if (( android_wt_count > 0 )); then
