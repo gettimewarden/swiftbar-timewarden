@@ -569,3 +569,6 @@ if (( ios_wt_count > 0 )); then
     done
 fi
 
+echo "---"
+echo "Refresh | sfimage=arrow.clockwise refresh=true color=$C_SECONDARY size=12"
+
