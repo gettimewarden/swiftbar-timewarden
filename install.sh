@@ -47,8 +47,14 @@ echo "SwiftBar plugins directory: $PLUGIN_DIR"
 if [[ $# -ge 1 ]]; then
     PROJECT_PATH="$1"
 else
-    # Try to auto-detect
-    candidate=$(find "$HOME/Developer" "$HOME/Projects" "$HOME/Code" "$HOME/repos" -maxdepth 2 -name "timewarden.mobile" -type d 2>/dev/null | head -1)
+    # Try to auto-detect with timeout
+    candidate=""
+    for dir in "$HOME/Developer" "$HOME/Projects" "$HOME/Code" "$HOME/repos"; do
+        if [[ -d "$dir" ]]; then
+            candidate=$(find "$dir" -maxdepth 2 -name "timewarden.mobile" -type d -print -quit 2>/dev/null)
+            [[ -n "$candidate" ]] && break
+        fi
+    done
     if [[ -n "$candidate" ]]; then
         echo "Auto-detected project: $candidate"
         read -rp "Use this path? [Y/n] " confirm

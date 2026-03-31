@@ -28,6 +28,12 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "See: github.com/gettimewarden/swiftbar-timewarden | size=12"
     exit 0
 fi
+if ! grep -qE '^TIMEWARDEN_PROJECT="[^"]+"$' "$CONFIG_FILE" 2>/dev/null; then
+    echo "⚠ Config invalid | size=13"
+    echo "---"
+    echo "Invalid config file. Re-run install.sh | color=#8E8E93 size=12"
+    exit 0
+fi
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
 MAIN_PROJECT="${TIMEWARDEN_PROJECT:?TIMEWARDEN_PROJECT not set in $CONFIG_FILE}"
@@ -39,18 +45,25 @@ MAIN_PROJECT="${TIMEWARDEN_PROJECT:?TIMEWARDEN_PROJECT not set in $CONFIG_FILE}"
 _launch_in_terminal() {
     local platform="$1" display="$2" project_dir="$3" wt_name="$4"
     shift 4
-    local run_cmd="$*"
+    local -a run_args=("$@")
 
     mkdir -p "$STATE_DIR"
-    local launcher="$STATE_DIR/_launch_$$.sh"
+    local launcher
+    launcher=$(mktemp "$STATE_DIR/_launch_XXXXXX.sh")
+    local state_file
+    state_file=$(mktemp "$STATE_DIR/XXXXXX.state")
+
+    printf -v args_str '%q ' "${run_args[@]}"
+
     cat > "$launcher" << LAUNCHER
 #!/bin/bash
+BASHPID=\$\$
 cd "$project_dir" || exit 1
 export PATH="$ANDROID_HOME/platform-tools:\$PATH"
 mkdir -p "$STATE_DIR"
-echo "${platform}|${display}|${wt_name}|\$(date +%s)" > "$STATE_DIR/\$\$.state"
-trap "rm -f '$STATE_DIR/'\\\$\\\$.state; rm -f '$launcher'" EXIT
-${run_cmd}
+echo "${platform}|${display}|${wt_name}|\$(date +%s)" > "$state_file"
+trap "rm -f '$state_file'; rm -f '$launcher'" EXIT
+./run.sh ${args_str}
 LAUNCHER
     chmod +x "$launcher"
 
@@ -70,25 +83,36 @@ case "${1:-}" in
     --run-android)
         project_dir="${2:?project dir required}"
         shift 2
+        local -a run_args=()
         device="${1:-all}"
         wt_name="$(basename "$project_dir")"
-        if [[ "$device" == "all" ]]; then
-            _launch_in_terminal "android" "all" "$project_dir" "$wt_name" "./run.sh"
-        else
-            _launch_in_terminal "android" "$device" "$project_dir" "$wt_name" "./run.sh '$device'"
+        if [[ "$device" != "all" ]]; then
+            run_args=("$device")
         fi
+        _launch_in_terminal "android" "$device" "$project_dir" "$wt_name" "./run.sh" "${run_args[@]}"
         exit 0
         ;;
     --run-ios)
         project_dir="${2:?project dir required}"
         shift 2
+        local run_args=()
         case "${1:-}" in
-            --device) ios_display="Physical device"; run_args="--device" ;;
-            --sim)    ios_display="${2:-Default sim}"; run_args="--sim '${2:-}'" ;;
-            *)        ios_display="auto"; run_args="" ;;
+            --device) 
+                ios_display="Physical device"
+                run_args=("--device")
+                ;;
+            --sim)
+                ios_display="${2:-Default sim}"
+                run_args=("--sim" "${2:-}")
+                shift
+                ;;
+            *)
+                ios_display="auto"
+                run_args=()
+                ;;
         esac
         wt_name="$(basename "$project_dir")"
-        _launch_in_terminal "ios" "$ios_display" "$project_dir" "$wt_name" "./run-ios.sh $run_args"
+        _launch_in_terminal "ios" "$ios_display" "$project_dir" "$wt_name" "./run-ios.sh" "${run_args[@]}"
         exit 0
         ;;
     --stop)
@@ -101,8 +125,10 @@ esac
 
 # ── Icon generation & caching ──────────────────────
 # Uses sips + base64 (macOS built-in) for app icon.
-# Uses swift + CoreGraphics (macOS built-in) for generated icons.
+# Uses pre-generated base64 for Android robot icon (faster than compiling Swift).
 # All results cached — regenerated only when source changes or cache missing.
+
+_ANDROID_ICON_PREGEN="aVZCT1J3MEtHZ29BQUFBTlNVaEVVZ0FBQUNBQUFBQWdDQVlBQUFCemVucjBBQUFBQVhOU1IwSUFyczRjNlFBQUFEaGxXRWxtVFUwQUtnQUFBQWdBQVlkcEFBUUFBQUFCQUFBQUdnQUFBQUFBQXFBQ0FBUUFBQUFCQUFBQUlLQURBQVFBQUFBQkFBQUFJQUFBQUFDUFRrREpBQUFDY1VsRVFWUllDZTFXejB0VVVSUSs5L2xRTW0xUXFLV2JTSWdCTjBrRzVrWWlLUDhFb1lXNWFXR0xRRndWajJ3VFFZdEMzRWlMVnYwRkNoS3pDNUpxRXd4RzZzWmxncUdva09qY3puZkhZZTdjSC9QdTROV1ZEeDV6M2ozZmQ4NTN6cDMzN2lHNnVBSTdNUHdyRzZRc1N3TGhkUmh6RkxlKzBtQUZCUnhabS8yVXBPbTN1K05pcklFZDhBQU91SWpoZ2djSllPS0tJb3ZrcVN0STA3VTZweHJEQUFjSk9OalorMENTOWdXSmUzZCt6OTQwWW5nZmdRVUhYQlhEZ1F3UzhHUHc5WTRrK1JIOFZOQ1VJNDV6cVlZRkZ6RmNvQ0FCSUI1SmVvOWZydWpScmU4ekJkak5MbUNBQmFiR2RlR0RCWHp0Zjc3S2xYeG1CWmM3QzEwVHJtRDYycVZDOTJOZ3dRRlg5K2wyc0FCRmtwVjNKK1FoUFlqTEZpUnZHeHdYakRYbVhNTnJMNHNKSlpPUzZENEg3U01odW5Jb2pXNHA5eVNKVFU2MFhLSEt3cGNiTDhvNndDdWdXTTdhZTlyYjNyTEVKN3lYclhWS3o2RFp2QjBWZmlQbS94NGVQeXNYczBPNG5BS1F2TGVqYlluZG94by9vaWxMMi8rT0gwQ0VzekpWK1prbFYzV1BWbk00T29BOUYwTDhqTlYyWDl1d0hWTEtnZFFFNEEvSGE4N09tTmpUUEtOQXZpY3RBZFYvdXovMFVPZDFtcjc2VUFIZWJDM1N5c0ZHQXpqUHI0T1J5NnBVdldvNnlyQ1IvRnA2UmQwMUlUb2t6Njlqa2NzUzBQSjdya2RzMWVadmlpMGdKd2phL3Vkb1Y5Mnd6U3ZQYitLdDc4REkraXZlbXZPN1d1NUFiR2tYQXV3TzhPa1Z1ODNlZUp6TEVvQ2owMHVJN0VBdVN3RE83Y2g1dk9HUXl4S0FvVUdkMjE1YUhBZHlJSmNsUUUwc1BEVEVTZE1rQ3VkQUxrc0FLSmhZaUdTcENmMlVMbG1xNXZBY3U1aFVNTEh3ZVQwWGN6dE9ab0M1MmpTRUtxeFBzVm5hV1ErbC93RWZlUEV0K2x6NURBQUFBQUJKUlU1RXJrSmdnZz09"
 
 generate_icons() {
     mkdir -p "$CACHE_DIR"
@@ -118,37 +144,10 @@ generate_icons() {
         rm -f "$tmp"
     fi
 
-    # ── Android robot icon: generate with Swift + CoreGraphics ──
+    # ── Android robot icon: use pre-generated base64 (no Swift compilation needed) ──
     local android_cached="$CACHE_DIR/android.b64"
     if [[ ! -s "$android_cached" ]]; then
-        local swift_src="$CACHE_DIR/_gen_android.swift"
-        cat > "$swift_src" << 'SWIFT'
-import Cocoa
-let w = 32, h = 32
-let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
-    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-    colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-NSGraphicsContext.saveGraphicsState()
-NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-let ctx = NSGraphicsContext.current!.cgContext
-ctx.translateBy(x: 0, y: CGFloat(h)); ctx.scaleBy(x: 1, y: -1)
-let green = CGColor(srgbRed: 61/255, green: 220/255, blue: 132/255, alpha: 1)
-ctx.setFillColor(green)
-ctx.addPath(CGPath(roundedRect: CGRect(x:4,y:10,width:28,height:22), cornerWidth:8, cornerHeight:8, transform:nil))
-ctx.fillPath()
-ctx.setFillColor(.white)
-ctx.fillEllipse(in: CGRect(x:12,y:16,width:4,height:4))
-ctx.fillEllipse(in: CGRect(x:20,y:16,width:4,height:4))
-ctx.setStrokeColor(green); ctx.setLineWidth(2)
-ctx.move(to: CGPoint(x:13,y:10)); ctx.addLine(to: CGPoint(x:10,y:3)); ctx.strokePath()
-ctx.move(to: CGPoint(x:23,y:10)); ctx.addLine(to: CGPoint(x:26,y:3)); ctx.strokePath()
-NSGraphicsContext.restoreGraphicsState()
-if let png = rep.representation(using: .png, properties: [:]) {
-    print(png.base64EncodedString(), terminator: "")
-}
-SWIFT
-        swift "$swift_src" > "$android_cached" 2>/dev/null
-        rm -f "$swift_src"
+        echo "$_ANDROID_ICON_PREGEN" > "$android_cached"
     fi
 }
 
@@ -170,6 +169,15 @@ C_SECONDARY="#8E8E93"  # System gray — secondary labels
 C_DISABLED="#636366"   # System gray 3 — disabled/empty
 
 # ── Helpers ─────────────────────────────────────────
+
+_adb_timeout() {
+    local timeout=5
+    if command -v timeout &>/dev/null; then
+        timeout "$timeout" "$@"
+    else
+        "$@"
+    fi
+}
 
 # Resolve Android serial → model name using already-gathered data
 serial_to_model() {
@@ -265,13 +273,21 @@ if [[ -x "$ADB" ]]; then
     while IFS= read -r serial; do
         [[ -z "$serial" ]] && continue
         android_serials+=("$serial")
-        model=$("$ADB" -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
+        info=$(_adb_timeout "$ADB" -s "$serial" shell "echo \$(getprop ro.product.model);echo \$(getprop ro.build.version.release);echo \$(getprop ro.build.version.sdk);echo \$(dumpsys battery | grep level: | awk '{print \$2}')" 2>/dev/null | tr -d '\r\n' | awk -F';' '{
+            model=$1
+            ver=$2
+            sdk=$3
+            bat=$4
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", model)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", ver)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", sdk)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", bat)
+            print model "|" ver "|" sdk "|" bat
+        }')
+        IFS='|' read -r model ver sdk bat <<< "$info"
         android_models+=("${model:-$serial}")
-        ver=$("$ADB" -s "$serial" shell getprop ro.build.version.release 2>/dev/null | tr -d '\r\n')
         android_versions+=("${ver:-?}")
-        sdk=$("$ADB" -s "$serial" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r\n')
         android_apis+=("${sdk:-?}")
-        bat=$("$ADB" -s "$serial" shell dumpsys battery 2>/dev/null | grep -m1 'level:' | awk '{print $2}' | tr -d '\r\n')
         android_batteries+=("${bat:-?}")
     done < <("$ADB" devices 2>/dev/null | awk 'NR>1 && $2=="device" {print $1}')
 fi
@@ -284,7 +300,7 @@ if [[ -x "$EMULATOR" ]]; then
     running_avds=()
     for serial in "${android_serials[@]}"; do
         if [[ "$serial" == emulator-* ]]; then
-            avd=$("$ADB" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r\n')
+            avd=$(_adb_timeout "$ADB" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r\n')
             [[ -n "$avd" ]] && running_avds+=("$avd")
         fi
     done
@@ -314,8 +330,9 @@ if command -v xcrun &>/dev/null; then
         ios_phy_model+=("${hw_model:-?}")
     done < <(python3 -c "
 import json
+import sys
 try:
-    data = json.load(open('$json_tmp'))
+    data = json.load(open(sys.argv[1]))
     for d in data.get('result',{}).get('devices',[]):
         hw = d.get('hardwareProperties',{})
         if hw.get('platform') == 'iOS':
@@ -325,7 +342,7 @@ try:
             print(f'{name}|{os_ver}|{hw_model}')
 except Exception:
     pass
-" 2>/dev/null)
+" "$json_tmp" 2>/dev/null)
     rm -f "$json_tmp"
 fi
 ios_phy_count=${#ios_phy_names[@]}
@@ -367,6 +384,7 @@ wt_has_run_ios=()
 wt_dirty=()
 wt_commits=()
 wt_ahead=()
+main_upstream=$(git -C "$MAIN_PROJECT" rev-parse --abbrev-ref @{upstream} 2>/dev/null || echo "")
 while IFS= read -r line; do
     [[ -z "$line" ]] && continue
     wt_path="${line%% *}"
@@ -380,7 +398,11 @@ while IFS= read -r line; do
     wt_dirty+=("$d")
     c=$(git -C "$wt_path" log --oneline -1 --no-decorate 2>/dev/null)
     wt_commits+=("${c#* }")
-    a=$(git -C "$wt_path" rev-list --count "$main_branch..HEAD" 2>/dev/null || echo "0")
+    if [[ -n "$main_upstream" ]]; then
+        a=$(git -C "$wt_path" rev-list --count "$main_upstream..HEAD" 2>/dev/null || echo "0")
+    else
+        a="0"
+    fi
     wt_ahead+=("$a")
 done < <(git -C "$MAIN_PROJECT" worktree list 2>/dev/null)
 wt_count=${#wt_paths[@]}
