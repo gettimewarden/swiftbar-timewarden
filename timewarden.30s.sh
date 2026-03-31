@@ -15,6 +15,12 @@ export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+# When run via SwiftBar, resolve symlinks to get actual installed path
+if [[ -L "$SELF" ]]; then
+    SELF=$(readlink -f "$SELF")
+fi
+# Get plugin filename for URL scheme (e.g. swiftbar://refreshplugin)
+PLUGIN_NAME="$(basename "$SELF")"
 CACHE_DIR="$HOME/.cache/swiftbar-timewarden"
 STATE_DIR="$CACHE_DIR/running"
 CONFIG_FILE="$CACHE_DIR/config"
@@ -643,5 +649,5 @@ if (( ios_wt_count > 0 )); then
 fi
 
 echo "---"
-echo "Refresh | sfimage=arrow.clockwise refresh=true color=$C_SECONDARY size=12"
+echo "Refresh | href='swiftbar://refreshplugin?plugin=$PLUGIN_NAME' sfimage=arrow.clockwise size=12"
 
