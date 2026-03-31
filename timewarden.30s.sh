@@ -493,7 +493,7 @@ fi
 # Dirty indicator
 (( main_dirty > 0 )) && dirty_suffix=" · ${main_dirty} changed" || dirty_suffix=""
 
-echo "${main_branch}${sync_str}${dirty_suffix} | sfimage=arrow.triangle.branch color=$C_SECONDARY size=14"
+echo "${main_branch}${sync_str}${dirty_suffix} | sfimage=arrow.triangle.branch color=$C_SECONDARY size=14 href='https://github.com/gettimewarden/timewarden.mobile'"
 echo "--${main_commit_hash} ${main_commit_msg:0:40} | sfimage=point.topleft.down.to.point.bottomright.curvepath color=$C_SECONDARY size=12"
 if (( main_dirty > 0 )); then
     echo "--${main_dirty} uncommitted changes | sfimage=pencil.circle color=$C_BUILD size=12"
