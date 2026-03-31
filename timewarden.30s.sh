@@ -537,11 +537,7 @@ if (( ${#android_parts[@]} > 0 )); then
 else
     android_label="Android · 0 devices"
 fi
-if [[ -n "$ICON_ANDROID" ]]; then
-    echo "$android_label | image=$ICON_ANDROID width=16 height=16 size=14"
-else
-    echo "$android_label | sfimage=play.rectangle.fill color=$C_ANDROID size=14"
-fi
+echo "$android_label | sfimage=play.rectangle.fill color=$C_ANDROID size=14"
 
 echo "--Run All Devices | sfimage=play.fill bash='$SELF' param1='--run-android' param2='$MAIN_PROJECT' terminal=false size=13"
 if (( android_count > 0 )); then
