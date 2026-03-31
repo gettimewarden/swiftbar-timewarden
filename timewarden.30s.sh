@@ -423,33 +423,25 @@ for v in "${wt_has_run_ios[@]}"; do [[ "$v" == "yes" ]] && ((ios_wt_count++)); d
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # ── Menu bar (20 chars max, show model name + time) ──
-if (( running_count > 0 )); then
-    if (( running_count == 1 )); then
-        p="${running_platforms[0]}"
-        d="${running_devices[0]}"
-        t=$(format_elapsed_short "${running_elapsed[0]}")
-        if [[ "$p" == "android" ]]; then
-            [[ "$d" == "all" ]] && bar_status="Android · ${t}" || bar_status="$(serial_to_model "$d") · ${t}"
+    if (( running_count > 0 )); then
+        if (( running_count == 1 )); then
+            p="${running_platforms[0]}"
+            d="${running_devices[0]}"
+            t=$(format_elapsed_short "${running_elapsed[0]}")
+            if [[ "$p" == "android" ]]; then
+                [[ "$d" == "all" ]] && bar_status="Android · ${t}" || bar_status="$(serial_to_model "$d") · ${t}"
+            else
+                [[ "$d" == "default" ]] && bar_status="iOS · ${t}" || bar_status="${d} · ${t}"
+            fi
+            bar_status="${bar_status:0:20}"
         else
-            [[ "$d" == "default" ]] && bar_status="iOS · ${t}" || bar_status="${d} · ${t}"
+            bar_status="${running_count} builds"
         fi
-        bar_status="${bar_status:0:20}"
-    else
-        bar_status="${running_count} builds"
-    fi
-    if [[ -n "$ICON_MENUBAR" ]]; then
-        echo "$bar_status | templateImage=$ICON_MENUBAR width=28 height=28 color=$C_BUILD"
-    else
         echo "$bar_status | sfimage=hammer.fill color=$C_BUILD size=13"
-    fi
-else
-    if [[ -n "$ICON_MENUBAR" ]]; then
-        echo "| templateImage=$ICON_MENUBAR width=28 height=28"
     else
         echo "TW | sfimage=hammer.fill size=13"
     fi
-fi
-echo "---"
+    echo "---"
 
 # ── Building (active builds) ──────────────────────
 if (( running_count > 0 )); then
